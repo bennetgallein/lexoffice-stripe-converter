@@ -1,0 +1,7 @@
+STRIPE_KEY='sk_live_xxx'
+
+MAIL_FROM="x@x.de"
+MAIL_TO="x@x"
+MAIL_SERVER="mein-server.de"
+MAIL_USER="x@x.de"
+MAIL_PASSWORD="xxx"

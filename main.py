@@ -1,11 +1,67 @@
 import csv
 import stripe
 from stripe.error import InvalidRequestError
+from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
+import time
+import smtplib
+from pathlib import Path
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email.utils import COMMASPACE, formatdate
+from email import encoders
+import requests
+from dotenv import load_dotenv
+from os import getenv
 
+load_dotenv()
 
 # Define your stripe key here
-STRIPE_KEY = ''
+STRIPE_KEY = getenv('STRIPE_KEY')
 STRIPE_NAME = 'Stripe Technology Europe, Limited'
+
+
+def send_mail(send_from, send_to, subject, message, files=[],
+              server="localhost", port=587, username='', password='',
+              use_tls=True):
+    """Compose and send email with provided info and attachments.
+
+    Args:
+        send_from (str): from name
+        send_to (list[str]): to name(s)
+        subject (str): message title
+        message (str): message body
+        files (list[str]): list of file paths to be attached to email
+        server (str): mail server host name
+        port (int): port number
+        username (str): server auth username
+        password (str): server auth password
+        use_tls (bool): use TLS mode
+    """
+    msg = MIMEMultipart()
+    msg['From'] = send_from
+    msg['To'] = COMMASPACE.join(send_to)
+    msg['Date'] = formatdate(localtime=True)
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(message))
+
+    for path in files:
+        part = MIMEBase('application', "octet-stream")
+        with open(path, 'rb') as file:
+            part.set_payload(file.read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition',
+                        'attachment; filename={}'.format(Path(path).name))
+        msg.attach(part)
+
+    smtp = smtplib.SMTP(server, port)
+    if use_tls:
+        smtp.starttls()
+    smtp.login(username, password)
+    smtp.sendmail(send_from, send_to, msg.as_string())
+    smtp.quit()
 
 
 def get_client():
@@ -23,14 +79,14 @@ def csv_header():
     :return: array
     """
     return [
-        'id',
-        'type',
-        'source',
-        'amount',
-        'customer',
-        'accounting_date',
-        'value_date',
-        'description',
+        # 'id',
+        # 'type',
+        # 'source',
+        'Betrag',
+        'Auftraggeber/Empfänger',
+        'Buchungsdatum',
+        'Wertstellungsdatum',
+        'Verwendungszweck',
     ]
 
 
@@ -42,9 +98,32 @@ def getCustomerByPayment(payment_id: str):
     :return:
     """
     try:
-        return get_client().Charge.retrieve(payment_id)['billing_details']['name']
+        charge = get_client().Charge.retrieve(payment_id)
+        if charge['billing_details']['name']:
+            return charge['billing_details']['name']
+
+        # load name from customer
+        customer = get_client().Customer.retrieve(charge.customer)
+        return customer.name
     except InvalidRequestError:
         return STRIPE_NAME
+
+
+def getDescription(payment_id: str):
+    """
+    This method fetches the description of the payment_intend based on the charge
+    """
+    try:
+        charge = get_client().Charge.retrieve(payment_id)
+        sessions = get_client().checkout.Session.list(
+            payment_intent=charge.payment_intent)
+        if len(sessions.data) > 0:
+            line_items = get_client().checkout.Session.list_line_items(
+                sessions.data[0].id)
+            return ' + '.join(map((lambda e: e.description), line_items.data))
+        return ""
+    except InvalidRequestError:
+        return ""
 
 
 def read_csv():
@@ -66,63 +145,102 @@ def read_csv():
     return csvlines
 
 
-def toMoney(am: str):
+def toMoney(am: int):
     """
     Convert the amount part to float and to an easy format, so lexoffice does not get in trouble
     :param am:
     :return:
     """
-    return float(
-        am.replace('.', '').replace(',', '.')
-    )
+    return str(am / 100).replace(".", ',')
 
 
 # Run the script
 if __name__ == '__main__':
-    stripeCSV = read_csv()
     everhypeCSV = []
+    attachments = []
 
-    for line in stripeCSV:
-        id = line[0]
-        transType = line[1]
-        source = line[2]
-        amount = line[3]
+    today = datetime.now().date()
+    lastMonth = today - relativedelta(months=1)
 
-        customer = getCustomerByPayment(source)
-        # --> created (utc)
-        accounting_date = line[9]
-        # --> available_on (utc)
-        value_date = line[10]
+    startDate = time.mktime(
+        (lastMonth - timedelta(days=int(lastMonth.strftime("%d")) - 1)).timetuple())
+    endDate = time.mktime((lastMonth + relativedelta(day=31)).timetuple())
+    transactions = get_client().BalanceTransaction.list(
+        created={"gte": str(startDate).split(".")[0], "lte": str(endDate).split(".")[0]})
+
+    print(f'Found {len(transactions.data)} transactions...')
+
+    for line in transactions.data:
+
+        customer = getCustomerByPayment(line.source)
+
         # --> description
-        description = line[11]
+        description = line.description
+        if description == "":
+            description = getDescription(line.source)
+        if description == "STRIPE PAYOUT":
+            description = "Auszahlung auf Bankkonto"
+
+        if description.startswith('Invoice'):
+            # load invoice pdf URL to payment
+            charge = get_client().Charge.retrieve(line.source)
+            if charge.invoice:
+                invoice = get_client().Invoice.retrieve(charge.invoice)
+                pdf = requests.get(invoice.invoice_pdf)
+                with open(f'invoices/{invoice.id}.pdf', 'wb') as invoice_file:
+                    invoice_file.write(pdf.content)
+                attachments.append(f'invoices/{invoice.id}.pdf')
+                # print(invoice)
+
+        created = datetime.fromtimestamp(
+            line.created).strftime('%d.%m.%Y %H:%M:%S')
+        available_on = datetime.fromtimestamp(
+            line.available_on).strftime('%d.%m.%Y %H:%M:%S')
 
         everhypeCSV.append([
-            id,
-            transType,
-            source,
-            toMoney(amount),
+            # line.id,
+            # line.type,
+            # line.source,
+            toMoney(line.amount),
             customer,
-            accounting_date,
-            value_date,
+            created,
+            available_on,
             description
         ])
 
         # If there are fees, we are generating a new line
-        if line[4] != '0,00':
+        if line.fee != 0:
             everhypeCSV.append([
-                id + '_fee',
-                'Kontoführungsgebühr',
-                source + '_fee',
-                toMoney(line[4]) * -1,
+                # line.id + '_fee',
+                # 'Kontoführungsgebühr',
+                # line.source + '_fee',
+                toMoney(line.fee) * -1,
                 STRIPE_NAME,
-                accounting_date,
-                value_date,
-                f'Gebühren für Zahlung {id} -- {description}'
+                created,
+                available_on,
+                f'Gebühren für Zahlung {line.id} -- {description}'
             ])
 
     # writing to export.csv
-    with open('export.csv', 'w', newline='', encoding='utf-8') as exportFile:
+    file_name = f'csvs/export-{today.strftime("%Y")}-{today.strftime("%m")}.csv'
+    with open(file_name, 'w', newline='', encoding='utf-8') as exportFile:
         writer = csv.writer(exportFile, delimiter=';')
 
         writer.writerow(csv_header())
         writer.writerows(everhypeCSV)
+
+    attachments.append(file_name)
+
+    send_mail(
+        send_from=getenv('MAIL_FROM'),
+        send_to=getenv("MAIL_TO"),
+        subject=f'Stripe export {file_name} is ready',
+        message='Hello,\n\nplease check attached files.',
+        files=attachments,
+        server=getenv('MAIL_SERVER'),
+        username=getenv("MAIL_USER"),
+        password=getenv("MAIL_PASSWORD")
+    )
+
+    print(
+        f'Send email to {getenv("MAIL_TO")} containing all invoices and csv ready for import')

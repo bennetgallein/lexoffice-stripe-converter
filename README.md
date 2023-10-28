@@ -1,22 +1,14 @@
 # stripe-lexoffice-csv
 
+Laedt alle Invoices von Stripe runter und baut eine CSV aus Transaktionen welche fuer den Import genutzt werden kann.
+
 Benötigte Packages:
 
  - csv
  - stripe
 
-Benötigte Dateien:
+Setup:
 
- - import.csv im gleichen Ordner, wie main.py 
-	 - Du Kannst diesen Export unter *Zahlungen > [Alle Transaktionen](https://dashboard.stripe.com/balance) > Export* herunterladen
-
-## Einrichtung
-
- - Lade dir das Repository runter.
- - Installiere die oben genannten Packages (bspw. über pip).
- - Hinterlege im Skript deinen Stripe API Key
- - Lege die Datei import.csv (falls diese nicht so heißt, benenne diese um oder ändere es im Code) in den gleichen Ordner, in welchem sich auch die main.py befindet, ab.
- - Starte das Script mit python3 main.py
- - Du erhältst die angepasste CSV-Datei im gleichen Ordner.
-
-Solltest du Hilfe brauchen, öffne gern ein Ticket per E-Mail an support@everhype.de
+1. .env.example kopieren, in .env umbenennen und Parameter einstellen
+2. script mit `python3 main.py` testen. Es sollte eine csv im csvs/ Ordner erstellt werden und per E-Mail verschickt werden.
+3. Per Cronjob am 1. des Monats laufen lassen. Es wird der vergangene Monat abgerufen.
