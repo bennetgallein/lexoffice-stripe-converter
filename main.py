@@ -176,7 +176,7 @@ if __name__ == '__main__':
 
         # --> description
         description = line.description
-        if description == "":
+        if description == "" or description == None:
             description = getDescription(line.source)
         if description == "STRIPE PAYOUT":
             description = "Auszahlung auf Bankkonto"
@@ -201,7 +201,7 @@ if __name__ == '__main__':
             # line.id,
             # line.type,
             # line.source,
-            toMoney(line.amount),
+            toMoney(line.amount or line.fee),
             customer,
             created,
             available_on,
@@ -214,7 +214,7 @@ if __name__ == '__main__':
                 # line.id + '_fee',
                 # 'Kontoführungsgebühr',
                 # line.source + '_fee',
-                toMoney(line.fee) * -1,
+                toMoney(line.fee * -1),
                 STRIPE_NAME,
                 created,
                 available_on,
