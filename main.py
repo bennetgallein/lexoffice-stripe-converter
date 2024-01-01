@@ -166,8 +166,9 @@ if __name__ == '__main__':
         (lastMonth - timedelta(days=int(lastMonth.strftime("%d")) - 1)).timetuple())
     endDate = time.mktime((lastMonth + relativedelta(day=31)).timetuple())
     transactions = get_client().BalanceTransaction.list(
-        created={"gte": str(startDate).split(".")[0], "lte": str(endDate).split(".")[0]})
+        created={"gte": str(startDate).split(".")[0], "lte": str(endDate).split(".")[0]}, limit=100)
 
+    print(startDate, endDate)
     print(f'Found {len(transactions.data)} transactions...')
 
     for line in transactions.data:
