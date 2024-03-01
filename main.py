@@ -14,6 +14,7 @@ from email import encoders
 import requests
 from dotenv import load_dotenv
 from os import getenv
+import pytz
 
 load_dotenv()
 
@@ -62,6 +63,40 @@ def send_mail(send_from, send_to, subject, message, files=[],
     smtp.login(username, password)
     smtp.sendmail(send_from, send_to, msg.as_string())
     smtp.quit()
+
+
+def get_unix_timestamp(dt):
+    return int(dt.timestamp())
+
+
+def get_first_and_last_day_unix_timestamps():
+    # Get the current date in UTC
+    today_utc = datetime.now(pytz.utc)
+
+    # Get the CEST timezone
+    cest_timezone = pytz.timezone('Europe/Paris')
+
+    # Convert current date to CEST
+    today_cest = today_utc.astimezone(cest_timezone)
+
+    # Calculate the first day of the previous month
+    first_day_previous_month = today_cest.replace(day=1) - timedelta(days=1)
+    first_day_previous_month = first_day_previous_month.replace(day=1)
+
+    # Calculate the last day of the previous month
+    last_day_previous_month = today_cest.replace(day=1) - timedelta(days=1)
+
+    # Convert the dates to UTC
+    first_day_previous_month_utc = first_day_previous_month.astimezone(
+        pytz.utc)
+    last_day_previous_month_utc = last_day_previous_month.astimezone(pytz.utc)
+
+    # Get the Unix timestamps
+    first_day_timestamp = get_unix_timestamp(first_day_previous_month_utc)
+    last_day_timestamp = get_unix_timestamp(
+        last_day_previous_month_utc.replace(hour=23, minute=59, second=59))
+
+    return first_day_timestamp, last_day_timestamp
 
 
 def get_client():
@@ -159,17 +194,15 @@ if __name__ == '__main__':
     everhypeCSV = []
     attachments = []
 
-    today = datetime.now().date()
-    lastMonth = today - relativedelta(months=1)
+    first_day_timestamp, last_day_timestamp = get_first_and_last_day_unix_timestamps()
 
-    startDate = time.mktime(
-        (lastMonth - timedelta(days=int(lastMonth.strftime("%d")) - 1)).timetuple())
-    endDate = time.mktime((lastMonth + relativedelta(day=31)).timetuple())
     transactions = get_client().BalanceTransaction.list(
-        created={"gte": str(startDate).split(".")[0], "lte": str(endDate).split(".")[0]}, limit=100)
+        created={"gte": first_day_timestamp, "lte": last_day_timestamp}, limit=100)
 
-    print(startDate, endDate)
+    print(first_day_timestamp, last_day_timestamp)
     print(f'Found {len(transactions.data)} transactions...')
+
+    exit()
 
     for line in transactions.data:
 
