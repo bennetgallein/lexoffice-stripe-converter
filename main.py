@@ -254,6 +254,7 @@ if __name__ == '__main__':
             ])
 
     # writing to export.csv
+    today = datetime.now().date()
     file_name = f'csvs/export-{today.strftime("%Y")}-{today.strftime("%m")}.csv'
     with open(file_name, 'w', newline='', encoding='utf-8') as exportFile:
         writer = csv.writer(exportFile, delimiter=';')
