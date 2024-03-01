@@ -202,8 +202,6 @@ if __name__ == '__main__':
     print(first_day_timestamp, last_day_timestamp)
     print(f'Found {len(transactions.data)} transactions...')
 
-    exit()
-
     for line in transactions.data:
 
         customer = getCustomerByPayment(line.source)
