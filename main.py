@@ -74,29 +74,30 @@ def get_first_and_last_day_unix_timestamps():
     today_utc = datetime.now(pytz.utc)
 
     # Get the CEST timezone
-    cest_timezone = pytz.timezone('Europe/Paris')
+    cest_timezone = pytz.timezone("Europe/Paris")
 
     # Convert current date to CEST
     today_cest = today_utc.astimezone(cest_timezone)
 
-    # Calculate the first day of the previous month
-    first_day_previous_month = today_cest.replace(day=1) - timedelta(days=1)
-    first_day_previous_month = first_day_previous_month.replace(day=1)
+    # Calculate one week prior
+    one_week_prior = today_cest - timedelta(days=8)
 
-    # Calculate the last day of the previous month
-    last_day_previous_month = today_cest.replace(day=1) - timedelta(days=1)
+    # Calculate one day prior
+    one_day_prior = today_cest - timedelta(days=1)
 
-    # Convert the dates to UTC
-    first_day_previous_month_utc = first_day_previous_month.astimezone(
-        pytz.utc)
-    last_day_previous_month_utc = last_day_previous_month.astimezone(pytz.utc)
+    # Convert the dates back to UTC and fix time
+    one_week_prior = one_week_prior.astimezone(pytz.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    one_day_prior = one_day_prior.astimezone(pytz.utc).replace(
+        hour=23, minute=59, second=59, microsecond=999999
+    )
 
     # Get the Unix timestamps
-    first_day_timestamp = get_unix_timestamp(first_day_previous_month_utc)
-    last_day_timestamp = get_unix_timestamp(
-        last_day_previous_month_utc.replace(hour=23, minute=59, second=59))
+    week_prior_timestamp = get_unix_timestamp(one_week_prior)
+    day_prior_timestamp = get_unix_timestamp(one_day_prior)
 
-    return first_day_timestamp, last_day_timestamp
+    return week_prior_timestamp, day_prior_timestamp
 
 
 def get_client():
